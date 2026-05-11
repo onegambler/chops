@@ -73,8 +73,9 @@ final class SkillScanner {
         let generation = scanGeneration
         let customPaths = UserDefaults.standard.stringArray(forKey: "customScanPaths") ?? []
         let includePlugins = ChopsSettings.includePluginSkills
+        let sources = (try? SourceStore.loadSourcesSnapshot(migratingLegacyPaths: true)) ?? []
         scanTask = Task.detached { [weak self] in
-            let results = Self.collectAllSkills(customPaths: customPaths, includePlugins: includePlugins)
+            let results = Self.collectAllSkills(customPaths: customPaths, includePlugins: includePlugins, sources: sources)
             guard !Task.isCancelled else { return }
             let elapsed = CFAbsoluteTimeGetCurrent() - start
             AppLogger.scanning.notice("File collection done: \(results.count) skills in \(String(format: "%.2f", elapsed))s")
@@ -89,7 +90,7 @@ final class SkillScanner {
     }
 
     /// Pure filesystem I/O — safe to run off main thread.
-    private static func collectAllSkills(customPaths: [String], includePlugins: Bool) -> [ScannedSkillData] {
+    private static func collectAllSkills(customPaths: [String], includePlugins: Bool, sources: [Source]) -> [ScannedSkillData] {
         var results: [ScannedSkillData] = []
 
         for tool in ToolSource.allCases where tool != .custom {
@@ -127,7 +128,28 @@ final class SkillScanner {
             collectFromCustomDirectory(URL(fileURLWithPath: path), into: &results)
         }
 
+        for source in sources {
+            guard !Task.isCancelled else { return results }
+            collectFromSource(source, into: &results)
+        }
+
         return results
+    }
+
+    private static func collectFromSource(_ source: Source, into results: inout [ScannedSkillData]) {
+        for skillDir in SourceSkillScanner.skillDirectories(in: source) {
+            guard !Task.isCancelled else { return }
+            let skillFile = skillDir.appendingPathComponent("SKILL.md")
+            if let data = collectSkillData(
+                at: skillFile,
+                toolSource: .custom,
+                isDirectory: true,
+                isGlobal: false,
+                kind: .skill
+            ) {
+                results.append(data)
+            }
+        }
     }
 
     private static func collectFromCustomDirectory(_ directory: URL, into results: inout [ScannedSkillData]) {

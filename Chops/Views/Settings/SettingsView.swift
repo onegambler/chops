@@ -8,7 +8,7 @@ extension Notification.Name {
 // MARK: - Settings Tab Definition
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, library, aiAssist, scanDirs, servers, about
+    case general, library, aiAssist, sources, servers, about
 
     var id: String { rawValue }
 
@@ -17,7 +17,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: "General"
         case .library: "Library"
         case .aiAssist: "AI Assist"
-        case .scanDirs: "Scan Directories"
+        case .sources: "Sources"
         case .servers: "Servers"
         case .about: "About"
         }
@@ -28,7 +28,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: "gearshape"
         case .library: "books.vertical"
         case .aiAssist: "sparkles"
-        case .scanDirs: "folder.badge.gearshape"
+        case .sources: "folder.badge.gearshape"
         case .servers: "server.rack"
         case .about: "info.circle"
         }
@@ -81,8 +81,8 @@ struct SettingsView: View {
             LibrarySettingsView()
         case .aiAssist:
             AgentSettingsView()
-        case .scanDirs:
-            scanSettings
+        case .sources:
+            SourcesSettingsView()
         case .servers:
             RemoteServersSettingsView()
         case .about:

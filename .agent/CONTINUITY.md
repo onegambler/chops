@@ -11,6 +11,7 @@
 - 2026-05-09T18:32:56+0200 [CODE] Added Source models/services, Settings > Sources UI, source scanner integration, source-only Library Skills filtering, install target sheet, source metadata badges, and prompt mention resolution.
 - 2026-05-11T15:32:21+0200 [CODE] Added `.github/workflows/build.yml` with a macOS 15 XcodeGen + unsigned Debug app build and an Ubuntu Astro site build.
 - 2026-05-11T15:41:42+0200 [CODE] Changed `.github/workflows/build.yml` triggers to `workflow_dispatch` only.
+- 2026-05-11T15:43:21+0200 [USER] Requested committing all remaining workspace changes, including the Chops Sources feature files.
 
 [DISCOVERIES]
 - 2026-05-09T18:32:56+0200 [TOOL] `xcodegen` is not installed and `xcodebuild` is blocked because active developer directory is Command Line Tools, not full Xcode.

@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Inline panel for composing/editing skill content via the user's installed Claude or Codex.
 struct ComposePanel: View {
@@ -23,6 +24,8 @@ struct ComposePanel: View {
     @AppStorage("AgentSelectedId") private var selectedAgentId: String?
     @State private var agent: (any AgentSession)?
     @State private var showingDebugLogs = false
+    @Query(sort: \Skill.name) private var allSkills: [Skill]
+    @State private var mentionWarning: String?
 
     /// Completed conversation history. Never holds in-flight messages — the agent drives live state.
     @State private var messages: [ChatMessage] = []
@@ -68,6 +71,23 @@ struct ComposePanel: View {
     private var isConnecting: Bool { agent?.isConnecting ?? false }
     private var isProcessing: Bool { agent?.isProcessing ?? false }
     private var hasPendingDiffs: Bool { messages.contains { $0.diffs.contains { $0.status == .pending } } }
+    private var mentionCandidates: [Skill] {
+        SkillMentionResolver.candidates(for: selectedAgent, skills: allSkills)
+    }
+    private var filteredMentionCandidates: [Skill] {
+        guard let query = SkillMentionResolver.activeMentionQuery(in: inputText) else { return [] }
+        if query.isEmpty { return Array(mentionCandidates.prefix(20)) }
+        return mentionCandidates
+            .filter {
+                $0.name.localizedCaseInsensitiveContains(query) ||
+                URL(fileURLWithPath: $0.filePath).deletingLastPathComponent().lastPathComponent.localizedCaseInsensitiveContains(query)
+            }
+            .prefix(20)
+            .map { $0 }
+    }
+    private var isShowingMentionPicker: Bool {
+        !filteredMentionCandidates.isEmpty && !isProcessing && isConnected && !hasPendingDiffs
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -717,6 +737,9 @@ struct ComposePanel: View {
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
                 .disabled(isProcessing || !isConnected || hasPendingDiffs)
+                .onChange(of: inputText) {
+                    mentionWarning = nil
+                }
                 .onSubmit {
                     if !sendDisabled { sendMessage() }
                 }
@@ -725,6 +748,9 @@ struct ComposePanel: View {
                 .background(Color(.textBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25)))
+                .popover(isPresented: .constant(isShowingMentionPicker), arrowEdge: .bottom) {
+                    mentionPicker
+                }
 
             if isProcessing {
                 Button {
@@ -760,9 +786,51 @@ struct ComposePanel: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
+        .overlay(alignment: .topLeading) {
+            if let mentionWarning {
+                Text(mentionWarning)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color(.windowBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .offset(x: 12, y: -26)
+            }
+        }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color(.controlBackgroundColor))
+    }
+
+    private var mentionPicker: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(filteredMentionCandidates) { skill in
+                Button {
+                    inputText = SkillMentionResolver.replacingActiveMention(in: inputText, with: skill)
+                    mentionWarning = nil
+                } label: {
+                    HStack {
+                        Image(systemName: "doc.text")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(skill.name)
+                                .font(.callout)
+                            Text(URL(fileURLWithPath: skill.filePath).deletingLastPathComponent().lastPathComponent)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(width: 320)
+        .padding(.vertical, 6)
     }
 
     private var resizeHandle: some View {
@@ -876,7 +944,17 @@ struct ComposePanel: View {
         guard !text.isEmpty else { return }
 
         inputText = ""
-        messages.append(ChatMessage(role: .user, text: text))
+        let resolution = SkillMentionResolver.resolve(prompt: text, candidates: mentionCandidates)
+        if !resolution.unresolved.isEmpty {
+            mentionWarning = "Unknown skill mention: \(resolution.unresolved.joined(separator: ", "))"
+            inputText = text
+            return
+        }
+
+        messages.append(ChatMessage(
+            role: .user,
+            text: resolution.contexts.isEmpty ? text : "\(text)\n\nUsing \(resolution.contexts.count) skill\(resolution.contexts.count == 1 ? "" : "s")."
+        ))
 
         let assistantId = UUID()
 
@@ -889,7 +967,7 @@ struct ComposePanel: View {
                 client.primeDeferredContent(for: fp, content: original)
                 // The agent owns prompt construction (system prompt + file content +
                 // user request). We just hand it the raw user text.
-                try await client.prompt(text)
+                try await client.prompt(resolution.expandedPrompt)
                 isFirstTurn = false
 
                 let raw = client.responseText

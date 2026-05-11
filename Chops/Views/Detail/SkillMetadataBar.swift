@@ -5,6 +5,7 @@ struct SkillMetadataBar: View {
     @Bindable var skill: Skill
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SkillCollection.sortOrder) private var allCollections: [SkillCollection]
+    @State private var sourceStore = SourceStore.shared
     @State private var showingCollectionPicker = false
 
     var body: some View {
@@ -26,6 +27,28 @@ struct SkillMetadataBar: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.indigo)
+
+                Divider().frame(height: 16)
+            }
+
+            if let match = sourceStore.match(for: skill) {
+                Label {
+                    Text(match.source.displayName)
+                } icon: {
+                    Image(systemName: match.source.kind.iconName)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .help("Source: \(match.relativeSkillPath)")
+
+                let installs = sourceStore.installs(for: match)
+                if !installs.isEmpty {
+                    Text(installs.map(\.targetDisplayName).joined(separator: ", "))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .help("Installed targets")
+                }
 
                 Divider().frame(height: 16)
             }

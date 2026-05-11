@@ -41,7 +41,7 @@ extension Skill {
     }
 
     var isReadOnly: Bool {
-        isPlugin || isBundledOpenClawSkill
+        isPlugin || isBundledOpenClawSkill || SourceStore.isSourceSkillSync(self)
     }
 
     // MARK: - Computed

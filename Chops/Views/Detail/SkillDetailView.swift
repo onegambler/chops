@@ -65,6 +65,7 @@ struct SkillDetailView: View {
         case confirmMakeGlobal
         case deleteError(String)
         case makeGlobalError(String)
+        case sourceActionSummary(String)
 
         var id: String {
             switch self {
@@ -76,6 +77,8 @@ struct SkillDetailView: View {
                 return "delete-error-\(message)"
             case .makeGlobalError(let message):
                 return "make-global-error-\(message)"
+            case .sourceActionSummary(let message):
+                return "source-action-summary-\(message)"
             }
         }
     }
@@ -88,6 +91,8 @@ struct SkillDetailView: View {
     @State private var activeAlert: ActiveAlert?
     @State private var autoSaveTask: Task<Void, Never>?
     @State private var showingComposePanel = false
+    @State private var sourceStore = SourceStore.shared
+    @State private var showingInstallSheet = false
 
     var body: some View {
         @Bindable var document = document
@@ -201,6 +206,29 @@ struct SkillDetailView: View {
                     .help("Make Global")
                 }
             }
+            if sourceStore.isSourceSkill(skill) {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button("Install...") {
+                            showingInstallSheet = true
+                        }
+                        if !SourceInstallService.installedTargetIDs(for: skill).isEmpty {
+                            Button("Uninstall Managed Installs") {
+                                let summary = SourceInstallService.uninstall(skills: [skill])
+                                activeAlert = .sourceActionSummary(summary.displayText)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                    .help("Install Source Skill")
+                }
+            }
+        }
+        .sheet(isPresented: $showingInstallSheet) {
+            InstallTargetsSheet(skills: [skill]) { summary in
+                activeAlert = .sourceActionSummary(summary.displayText)
+            }
         }
         .alert(item: $activeAlert) { alert in
             switch alert {
@@ -232,6 +260,12 @@ struct SkillDetailView: View {
                 return Alert(
                     title: Text("Make Global Failed"),
                     message: Text(message),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .sourceActionSummary(let message):
+                return Alert(
+                    title: Text("Source Action"),
+                    message: Text(message.isEmpty ? "No changes." : message),
                     dismissButton: .default(Text("OK"))
                 )
             }

@@ -59,6 +59,7 @@ struct ContentView: View {
             allPaths.append(contentsOf: tool.globalAgentPaths)
             allPaths.append(contentsOf: tool.globalRulePaths)
         }
+        allPaths.append(contentsOf: SourceStore.sourceRootsSnapshot())
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser.path
         let claudePlugins = "\(home)/.claude/plugins"

@@ -7,6 +7,7 @@ struct SkillListView: View {
         case confirmMakeGlobal(Skill)
         case deleteError(String)
         case makeGlobalError(String)
+        case sourceActionSummary(String)
 
         var id: String {
             switch self {
@@ -18,6 +19,8 @@ struct SkillListView: View {
                 return "delete-error-\(message)"
             case .makeGlobalError(let message):
                 return "make-global-error-\(message)"
+            case .sourceActionSummary(let message):
+                return "source-action-summary-\(message)"
             }
         }
     }
@@ -26,14 +29,17 @@ struct SkillListView: View {
     @Environment(AppState.self) private var appState
     @Query(sort: \Skill.name) private var allSkills: [Skill]
     @Query(sort: \SkillCollection.name) private var allCollections: [SkillCollection]
+    @State private var sourceStore = SourceStore.shared
     @State private var activeAlert: ActiveAlert?
+    @State private var installSheetSkills: [Skill] = []
+    @State private var showingInstallSheet = false
 
     private var filteredSkills: [Skill] {
         var result = allSkills
 
         switch appState.sidebarFilter {
         case .allSkills:
-            result = result.filter { $0.itemKind == .skill }
+            result = result.filter { $0.itemKind == .skill && sourceStore.isSourceSkill($0) }
         case .allAgents:
             result = result.filter { $0.itemKind == .agent }
         case .allRules:
@@ -120,6 +126,20 @@ struct SkillListView: View {
         Button(skill.isFavorite ? "Unfavorite" : "Favorite") {
             skill.isFavorite.toggle()
             try? modelContext.save()
+        }
+        if sourceStore.isSourceSkill(skill) {
+            Button("Install...") {
+                installSheetSkills = [skill]
+                showingInstallSheet = true
+            }
+            let installedTargets = SourceInstallService.installedTargetIDs(for: skill)
+            if !installedTargets.isEmpty {
+                Button("Uninstall Managed Installs") {
+                    let summary = SourceInstallService.uninstall(skills: [skill])
+                    activeAlert = .sourceActionSummary(summary.displayText)
+                }
+            }
+            Divider()
         }
         if skill.canMakeGlobal {
             Button("Make Global") {
@@ -224,6 +244,24 @@ struct SkillListView: View {
                             Image(systemName: appState.toolKindFilter != nil ? "ellipsis.circle.fill" : "ellipsis.circle")
                         }
                     }
+                    if case .allSkills = appState.sidebarFilter, !filteredSkills.isEmpty {
+                        Menu {
+                            Button {
+                                installSheetSkills = filteredSkills
+                                showingInstallSheet = true
+                            } label: {
+                                Label("Install Visible...", systemImage: "square.and.arrow.down")
+                            }
+                            Button {
+                                let summary = SourceInstallService.uninstall(skills: filteredSkills)
+                                activeAlert = .sourceActionSummary(summary.displayText)
+                            } label: {
+                                Label("Uninstall Visible", systemImage: "trash")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
+                    }
                     Menu {
                         Button {
                             appState.newItemKind = .skill
@@ -288,6 +326,17 @@ struct SkillListView: View {
                     message: Text(message),
                     dismissButton: .default(Text("OK"))
                 )
+            case .sourceActionSummary(let message):
+                return Alert(
+                    title: Text("Source Action"),
+                    message: Text(message.isEmpty ? "No changes." : message),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
+        }
+        .sheet(isPresented: $showingInstallSheet) {
+            InstallTargetsSheet(skills: installSheetSkills) { summary in
+                activeAlert = .sourceActionSummary(summary.displayText)
             }
         }
         .overlay {
@@ -306,6 +355,7 @@ struct SkillListView: View {
 struct SkillRow: View {
     let skill: Skill
     var showTypeBadge: Bool = false
+    @State private var sourceStore = SourceStore.shared
 
     var body: some View {
         HStack(spacing: 6) {
@@ -349,6 +399,29 @@ struct SkillRow: View {
                         .help(tool.displayName)
                         .opacity(0.6)
                 }
+            }
+
+            if let match = sourceStore.match(for: skill) {
+                Text(match.source.displayName)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.secondary.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .help("Source: \(match.source.displayName)")
+            }
+
+            let installedTargetIDs = SourceInstallService.installedTargetIDs(for: skill)
+            if !installedTargetIDs.isEmpty {
+                Text("\(installedTargetIDs.count)")
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.accentColor)
+                    .clipShape(Capsule())
+                    .help("Installed to \(installedTargetIDs.count) target\(installedTargetIDs.count == 1 ? "" : "s")")
             }
         }
         .padding(.vertical, 4)
