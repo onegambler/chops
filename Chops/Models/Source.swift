@@ -50,6 +50,10 @@ struct Source: Identifiable, Codable, Hashable {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return scanRootPath.hasPrefix(home) ? "~" + scanRootPath.dropFirst(home.count) : scanRootPath
     }
+
+    var isWritable: Bool {
+        kind == .local
+    }
 }
 
 struct SourceInstall: Identifiable, Codable, Hashable {

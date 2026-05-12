@@ -141,8 +141,17 @@ final class SourceStore {
         return match(for: skill, sources: sources) != nil
     }
 
+    nonisolated static func matchSync(for skill: Skill) -> SourceSkillMatch? {
+        let sources = (try? loadSourcesSnapshot(migratingLegacyPaths: true)) ?? []
+        return match(for: skill, sources: sources)
+    }
+
     nonisolated static func sourceRootsSnapshot() -> [String] {
         ((try? loadSourcesSnapshot(migratingLegacyPaths: true)) ?? []).map(\.scanRootPath)
+    }
+
+    nonisolated static func writableSourcesSnapshot() -> [Source] {
+        ((try? loadSourcesSnapshot(migratingLegacyPaths: true)) ?? []).filter(\.isWritable)
     }
 
     nonisolated static func loadSourcesSnapshot(migratingLegacyPaths: Bool = false) throws -> [Source] {

@@ -41,7 +41,12 @@ extension Skill {
     }
 
     var isReadOnly: Bool {
-        isPlugin || isBundledOpenClawSkill || SourceStore.isSourceSkillSync(self)
+        isPlugin || isBundledOpenClawSkill || isInGitSource
+    }
+
+    private var isInGitSource: Bool {
+        guard let match = SourceStore.matchSync(for: self) else { return false }
+        return match.source.kind == .git
     }
 
     // MARK: - Computed
