@@ -236,6 +236,11 @@ final class SkillScanner {
         }
     }
 
+    private static let ignoredDirectoryNames: Set<String> = [
+        ".git", ".github", ".cache", ".build", ".swiftpm",
+        "node_modules", "dist", "build", "__pycache__", ".DS_Store",
+    ]
+
     private static func collectFromDirectory(_ directory: URL, toolSource: ToolSource, isGlobal: Bool, kind: ItemKind = .skill, into results: inout [ScannedSkillData]) {
         let fm = FileManager.default
 
@@ -247,10 +252,12 @@ final class SkillScanner {
         // Enumerate through the resolved directory so symlinked directories are traversed.
         let resolvedDirectory = directory.resolvingSymlinksInPath()
 
+        // Don't use .skipsHiddenFiles — tool directories like ~/.codex/skills/.system/ are
+        // intentionally hidden but contain valid skills that should be discovered.
         guard let contents = try? fm.contentsOfDirectory(
             at: resolvedDirectory,
             includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
+            options: []
         ) else { return }
 
         // Track both bases so each entry can be remapped back to the canonical path for storage.
@@ -259,6 +266,7 @@ final class SkillScanner {
 
         for rawItem in contents {
             guard !Task.isCancelled else { return }
+            guard !ignoredDirectoryNames.contains(rawItem.lastPathComponent) else { continue }
             // Remap to canonical path for storage; use rawItem for filesystem operations.
             let item: URL
             if originalBase != resolvedBase, rawItem.path.hasPrefix(resolvedBase + "/") {
