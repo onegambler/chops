@@ -149,6 +149,7 @@ final class SkillLifecycleTests: XCTestCase {
 
         XCTAssertFalse(skill.isFavorite)
 
+        modelContext.insert(skill)
         skill.isFavorite = true
         try modelContext.save()
 

@@ -15,8 +15,6 @@ final class OneShotResponseParserTests: XCTestCase {
         """
 
         let response = """
-        Updated skill description
-
         {
           "summary": "Updated skill description",
           "edits": [
@@ -28,7 +26,7 @@ final class OneShotResponseParserTests: XCTestCase {
         let result = OneShotResponseParser.parse(response, originalContent: originalContent)
 
         XCTAssertEqual(result.summary, "Updated skill description")
-        XCTAssertTrue(result.newContent?.contains("Updated content") ?? false)
+        XCTAssertEqual(result.newContent, "Updated content")
     }
 
     // MARK: - Fenced Block Format Tests

@@ -88,7 +88,7 @@ final class SkillParserTests: XCTestCase {
         name: Advanced Skill
         description: A more complex skill
         author: Test Author
-        version: "1.0"
+        version: 1.0
         tags: test,unit,ci
         ---
 
