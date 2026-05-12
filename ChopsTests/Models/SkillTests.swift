@@ -278,11 +278,11 @@ final class SkillTests: XCTestCase {
 
     func testIsRemoteTrue() {
         let server = RemoteServer(
-            id: "test-server",
             label: "Test Server",
             host: "example.com",
-            user: "test",
-            skillsPath: "/home/test/skills"
+            port: 22,
+            username: "test",
+            skillsBasePath: "/home/test/skills"
         )
 
         let skill = Skill(
