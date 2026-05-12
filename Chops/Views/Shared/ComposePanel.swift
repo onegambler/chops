@@ -748,8 +748,12 @@ struct ComposePanel: View {
                 .background(Color(.textBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25)))
-                .popover(isPresented: .constant(isShowingMentionPicker), arrowEdge: .bottom) {
-                    mentionPicker
+                .overlay(alignment: .top) {
+                    if isShowingMentionPicker {
+                        mentionPicker
+                            .offset(y: -8)
+                            .transition(.opacity)
+                    }
                 }
 
             if isProcessing {
@@ -831,6 +835,9 @@ struct ComposePanel: View {
         }
         .frame(width: 320)
         .padding(.vertical, 6)
+        .background(Color(.windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
     }
 
     private var resizeHandle: some View {
