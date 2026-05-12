@@ -298,6 +298,7 @@ struct SkillDetailView: View {
         do {
             try skill.deleteFromDisk()
             appState.selectedSkill = nil
+            appState.selectedSkillIDs.remove(skill.resolvedPath)
             modelContext.delete(skill)
             try modelContext.save()
         } catch {

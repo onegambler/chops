@@ -46,6 +46,10 @@ struct SkillListView: View {
             result = result.filter { $0.itemKind == .rule }
         case .favorites:
             result = result.filter { $0.isFavorite }
+        case .source(let sourceID):
+            result = result.filter {
+                $0.itemKind == .skill && sourceStore.match(for: $0)?.source.id == sourceID
+            }
         case .tool(let tool):
             result = result.filter { $0.toolSources.contains(tool) }
             if let kind = appState.toolKindFilter {
@@ -76,6 +80,8 @@ struct SkillListView: View {
         case .allAgents: "Agents"
         case .allRules: "Rules"
         case .favorites: "Favorites"
+        case .source(let sourceID):
+            sourceStore.sources.first(where: { $0.id == sourceID })?.displayName ?? "Skills"
         case .tool(let tool): tool.displayName
         case .collection(let name): name
         case .server(let id):
@@ -86,7 +92,7 @@ struct SkillListView: View {
     /// Whether the current filter shows mixed item types (skills and agents together)
     private var showsTypeBadge: Bool {
         switch appState.sidebarFilter {
-        case .allSkills, .allAgents, .allRules: false
+        case .allSkills, .allAgents, .allRules, .source: false
         case .tool: appState.toolKindFilter == nil
         default: true
         }
@@ -96,6 +102,22 @@ struct SkillListView: View {
         guard case .tool(let tool) = appState.sidebarFilter else { return [] }
         let kinds = Set(allSkills.filter { $0.toolSources.contains(tool) }.map(\.itemKind))
         return ItemKind.allCases.filter { kinds.contains($0) }
+    }
+
+    private var visibleSourceSkills: [Skill] {
+        filteredSkills.filter { sourceStore.isSourceSkill($0) }
+    }
+
+    private var selectedSourceSkills: [Skill] {
+        visibleSourceSkills.filter { appState.selectedSkillIDs.contains(selectionID(for: $0)) }
+    }
+
+    private var showsSourceActions: Bool {
+        !visibleSourceSkills.isEmpty
+    }
+
+    private func selectionID(for skill: Skill) -> String {
+        skill.resolvedPath
     }
 
     @ViewBuilder
@@ -195,6 +217,7 @@ struct SkillListView: View {
             if appState.selectedSkill == skill {
                 appState.selectedSkill = nil
             }
+            appState.selectedSkillIDs.remove(selectionID(for: skill))
             modelContext.delete(skill)
             try modelContext.save()
         } catch {
@@ -202,13 +225,40 @@ struct SkillListView: View {
         }
     }
 
+    private func install(_ skills: [Skill]) {
+        installSheetSkills = skills
+        showingInstallSheet = true
+    }
+
+    private func uninstall(_ skills: [Skill]) {
+        let summary = SourceInstallService.uninstall(skills: skills)
+        activeAlert = .sourceActionSummary(summary.displayText)
+    }
+
+    private func syncPrimarySelection() {
+        guard !appState.selectedSkillIDs.isEmpty else {
+            appState.selectedSkill = nil
+            return
+        }
+
+        if let selected = appState.selectedSkill,
+           filteredSkills.contains(selected),
+           appState.selectedSkillIDs.contains(selectionID(for: selected)) {
+            return
+        }
+
+        appState.selectedSkill = filteredSkills.first {
+            appState.selectedSkillIDs.contains(selectionID(for: $0))
+        }
+    }
+
     var body: some View {
         @Bindable var appState = appState
 
-        List(selection: $appState.selectedSkill) {
+        List(selection: $appState.selectedSkillIDs) {
             ForEach(filteredSkills) { skill in
                 SkillRow(skill: skill, showTypeBadge: showsTypeBadge)
-                    .tag(skill)
+                    .tag(selectionID(for: skill))
                     .draggable(skill.resolvedPath)
                     .contextMenu { contextMenu(for: skill) }
             }
@@ -244,19 +294,34 @@ struct SkillListView: View {
                             Image(systemName: appState.toolKindFilter != nil ? "ellipsis.circle.fill" : "ellipsis.circle")
                         }
                     }
-                    if case .allSkills = appState.sidebarFilter, !filteredSkills.isEmpty {
+                    if showsSourceActions {
                         Menu {
                             Button {
-                                installSheetSkills = filteredSkills
-                                showingInstallSheet = true
+                                install(selectedSourceSkills)
                             } label: {
-                                Label("Install Visible...", systemImage: "square.and.arrow.down")
+                                Label("Install Selected", systemImage: "square.and.arrow.down")
                             }
+                            .disabled(selectedSourceSkills.isEmpty)
+
                             Button {
-                                let summary = SourceInstallService.uninstall(skills: filteredSkills)
-                                activeAlert = .sourceActionSummary(summary.displayText)
+                                uninstall(selectedSourceSkills)
                             } label: {
-                                Label("Uninstall Visible", systemImage: "trash")
+                                Label("Uninstall Selected", systemImage: "trash")
+                            }
+                            .disabled(selectedSourceSkills.isEmpty)
+
+                            Divider()
+
+                            Button {
+                                install(visibleSourceSkills)
+                            } label: {
+                                Label("Install All", systemImage: "square.and.arrow.down")
+                            }
+
+                            Button {
+                                uninstall(visibleSourceSkills)
+                            } label: {
+                                Label("Uninstall All", systemImage: "trash")
                             }
                         } label: {
                             Image(systemName: "ellipsis.circle")
@@ -344,9 +409,25 @@ struct SkillListView: View {
         }
         .onChange(of: appState.sidebarFilter) {
             if let selected = appState.selectedSkill, filteredSkills.contains(selected) {
-                // Already selected something valid in this filter
+                appState.selectedSkillIDs = [selectionID(for: selected)]
             } else {
                 appState.selectedSkill = filteredSkills.first
+                if let selected = appState.selectedSkill {
+                    appState.selectedSkillIDs = [selectionID(for: selected)]
+                } else {
+                    appState.selectedSkillIDs = []
+                }
+            }
+        }
+        .onChange(of: appState.selectedSkillIDs) {
+            syncPrimarySelection()
+        }
+        .onAppear {
+            if let selected = appState.selectedSkill {
+                appState.selectedSkillIDs = [selectionID(for: selected)]
+            } else if let first = filteredSkills.first {
+                appState.selectedSkill = first
+                appState.selectedSkillIDs = [selectionID(for: first)]
             }
         }
     }

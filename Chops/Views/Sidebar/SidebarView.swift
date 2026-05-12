@@ -6,6 +6,8 @@ struct SidebarView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Skill.name) private var allSkills: [Skill]
     @Query(sort: \RemoteServer.label) private var servers: [RemoteServer]
+    @State private var sourceStore = SourceStore.shared
+    @State private var skillsExpanded = true
     @State private var syncingServerIDs: Set<String> = []
     @State private var serverErrors: [String: String] = [:]
     @State private var showingErrorForServer: String?
@@ -21,14 +23,42 @@ struct SidebarView: View {
         allSkills.filter { $0.toolSources.contains(tool) }.count
     }
 
+    private var sourceSkills: [Skill] {
+        allSkills.filter { $0.itemKind == .skill && sourceStore.isSourceSkill($0) }
+    }
+
+    private func sourceCount(_ source: Source) -> Int {
+        sourceSkills.filter { sourceStore.match(for: $0)?.source.id == source.id }.count
+    }
+
     var body: some View {
         @Bindable var appState = appState
 
         List(selection: $appState.sidebarFilter) {
             Section("Library") {
-                Label("Skills", systemImage: "doc.text")
-                    .badge(allSkills.filter { $0.itemKind == .skill }.count)
+                if sourceStore.sources.isEmpty {
+                    Label("Skills", systemImage: "doc.text")
+                        .badge(sourceSkills.count)
+                        .tag(SidebarFilter.allSkills)
+                } else {
+                    DisclosureGroup(isExpanded: $skillsExpanded) {
+                        ForEach(sourceStore.sources) { source in
+                            Label {
+                                Text(source.displayName)
+                            } icon: {
+                                Image(systemName: source.kind.iconName)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .badge(sourceCount(source))
+                            .help(source.displayPath)
+                            .tag(SidebarFilter.source(source.id))
+                        }
+                    } label: {
+                        Label("Skills", systemImage: "doc.text")
+                            .badge(sourceSkills.count)
+                    }
                     .tag(SidebarFilter.allSkills)
+                }
 
                 Label("Agents", systemImage: "person.crop.rectangle")
                     .badge(allSkills.filter { $0.itemKind == .agent }.count)

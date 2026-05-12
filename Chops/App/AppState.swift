@@ -9,6 +9,7 @@ final class AppState {
     var showingRegistrySheet: Bool = false
     var newItemKind: ItemKind = .skill
     var sidebarFilter: SidebarFilter = .allSkills
+    var selectedSkillIDs: Set<String> = []
     /// Filter by item kind within a tool view (nil = show all)
     var toolKindFilter: ItemKind?
 }
@@ -18,6 +19,7 @@ enum SidebarFilter: Hashable {
     case allAgents
     case allRules
     case favorites
+    case source(String)
     case tool(ToolSource)
     case collection(String)
     case server(String)

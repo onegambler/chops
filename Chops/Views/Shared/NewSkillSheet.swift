@@ -166,6 +166,7 @@ struct NewSkillSheet: View {
             case .rule: appState.sidebarFilter = .allRules
             }
             appState.selectedSkill = skill
+            appState.selectedSkillIDs = [skill.resolvedPath]
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
