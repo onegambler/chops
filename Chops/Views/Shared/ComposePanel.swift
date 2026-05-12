@@ -38,6 +38,7 @@ struct ComposePanel: View {
     @State private var dragStartHeight: CGFloat?
     @State private var applyingDiffID: String?
     @State private var diffApplyError: DiffApplyError?
+    @State private var inputAreaHeight: CGFloat = 54
 
     private static let minPanelHeight: CGFloat = 160
     private static let maxPanelHeight: CGFloat = 700
@@ -104,6 +105,14 @@ struct ComposePanel: View {
                     chatArea
                     Divider()
                     inputArea
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if isShowingMentionPicker {
+                        mentionPicker
+                            .padding(.leading, 12)
+                            .padding(.bottom, inputAreaHeight + 1)
+                            .transition(.opacity)
+                    }
                 }
             }
         }
@@ -748,13 +757,6 @@ struct ComposePanel: View {
                 .background(Color(.textBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25)))
-                .overlay(alignment: .top) {
-                    if isShowingMentionPicker {
-                        mentionPicker
-                            .offset(y: -8)
-                            .transition(.opacity)
-                    }
-                }
 
             if isProcessing {
                 Button {
@@ -805,6 +807,11 @@ struct ComposePanel: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color(.controlBackgroundColor))
+        .background(GeometryReader { geo in
+            Color.clear
+                .onAppear { inputAreaHeight = geo.size.height }
+                .onChange(of: geo.size.height) { _, h in inputAreaHeight = h }
+        })
     }
 
     private var mentionPicker: some View {
