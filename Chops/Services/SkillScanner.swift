@@ -297,8 +297,8 @@ final class SkillScanner {
                     if let data = collectSkillData(at: remappedAgentFile, toolSource: toolSource, isDirectory: true, isGlobal: isGlobal, kind: kind) {
                         results.append(data)
                     }
-                } else if toolSource == .hermes, kind == .skill {
-                    // Hermes nests skills as ~/.hermes/skills/<category>/<skill>/SKILL.md (agentskills.io layout).
+                } else if (toolSource == .hermes || toolSource == .codex), kind == .skill {
+                    // Hermes and Codex nest skills one level deeper (e.g. ~/.codex/skills/.system/<skill>/SKILL.md).
                     collectFromDirectory(item, toolSource: toolSource, isGlobal: isGlobal, kind: kind, into: &results)
                 }
             } else if item.pathExtension == "md" || item.pathExtension == "mdc" || item.pathExtension == "toml" {
