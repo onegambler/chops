@@ -145,58 +145,68 @@ struct SkillListView: View {
 
     @ViewBuilder
     private func contextMenu(for skill: Skill) -> some View {
-        Button(skill.isFavorite ? "Unfavorite" : "Favorite") {
-            skill.isFavorite.toggle()
-            try? modelContext.save()
+        let selectedSkills = filteredSkills.filter { appState.selectedSkillIDs.contains(selectionID(for: $0)) }
+        let contextSkills = selectedSkills.count > 1 ? selectedSkills : [skill]
+        let isMultiSelection = contextSkills.count > 1
+
+        if contextSkills.count == 1 {
+            Button(skill.isFavorite ? "Unfavorite" : "Favorite") {
+                skill.isFavorite.toggle()
+                try? modelContext.save()
+            }
         }
-        if sourceStore.isSourceSkill(skill) {
-            Button("Install...") {
-                installSheetSkills = [skill]
+
+        let allSourceSkills = contextSkills.allSatisfy { sourceStore.isSourceSkill($0) }
+        if allSourceSkills {
+            Button(isMultiSelection ? "Install \(contextSkills.count) Skills..." : "Install...") {
+                installSheetSkills = contextSkills
                 showingInstallSheet = true
             }
-            let installedTargets = SourceInstallService.installedTargetIDs(for: skill)
-            if !installedTargets.isEmpty {
-                Button("Uninstall Managed Installs") {
-                    let summary = SourceInstallService.uninstall(skills: [skill])
+            let anyInstalled = contextSkills.contains { !SourceInstallService.installedTargetIDs(for: $0).isEmpty }
+            if anyInstalled {
+                Button(isMultiSelection ? "Uninstall \(contextSkills.count) Skills" : "Uninstall Managed Installs") {
+                    let summary = SourceInstallService.uninstall(skills: contextSkills)
                     activeAlert = .sourceActionSummary(summary.displayText)
                 }
             }
             Divider()
         }
-        if skill.canMakeGlobal {
-            Button("Make Global") {
-                activeAlert = .confirmMakeGlobal(skill)
+        if contextSkills.count == 1 {
+            if skill.canMakeGlobal {
+                Button("Make Global") {
+                    activeAlert = .confirmMakeGlobal(skill)
+                }
             }
-        }
-        if !allCollections.isEmpty {
-            Menu("Collections") {
-                ForEach(allCollections) { collection in
-                    let isAssigned = skill.collections.contains(where: { $0.name == collection.name })
-                    Button {
-                        if isAssigned {
-                            skill.collections.removeAll { $0.name == collection.name }
-                        } else {
-                            skill.collections.append(collection)
-                        }
-                        try? modelContext.save()
-                    } label: {
-                        Toggle(isOn: .constant(isAssigned)) {
-                            Label(collection.name, systemImage: collection.icon)
+            if !allCollections.isEmpty {
+                Menu("Collections") {
+                    ForEach(allCollections) { collection in
+                        let isAssigned = skill.collections.contains(where: { $0.name == collection.name })
+                        Button {
+                            if isAssigned {
+                                skill.collections.removeAll { $0.name == collection.name }
+                            } else {
+                                skill.collections.append(collection)
+                            }
+                            try? modelContext.save()
+                        } label: {
+                            Toggle(isOn: .constant(isAssigned)) {
+                                Label(collection.name, systemImage: collection.icon)
+                            }
                         }
                     }
                 }
             }
-        }
-        if !skill.isRemote {
-            Divider()
-            Button("Show in Finder") {
-                NSWorkspace.shared.selectFile(skill.filePath, inFileViewerRootedAtPath: "")
+            if !skill.isRemote {
+                Divider()
+                Button("Show in Finder") {
+                    NSWorkspace.shared.selectFile(skill.filePath, inFileViewerRootedAtPath: "")
+                }
             }
-        }
-        if !skill.isReadOnly {
-            Divider()
-            Button("Delete", role: .destructive) {
-                activeAlert = .confirmDelete(skill)
+            if !skill.isReadOnly {
+                Divider()
+                Button("Delete", role: .destructive) {
+                    activeAlert = .confirmDelete(skill)
+                }
             }
         }
     }
