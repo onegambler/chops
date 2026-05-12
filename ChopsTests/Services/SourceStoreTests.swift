@@ -76,7 +76,8 @@ final class SourceStoreTests: XCTestCase {
             displayName: "Test Source",
             kind: .local,
             path: "/tmp/test",
-            branch: ""
+            branch: "",
+            createdAt: Date()
         )
 
         let encoder = JSONEncoder()
@@ -86,7 +87,8 @@ final class SourceStoreTests: XCTestCase {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        let data = try encoder.encode([source])
+        let sources: [Source] = [source]
+        let data = try encoder.encode(sources)
         let decoded = try decoder.decode([Source].self, from: data)
 
         XCTAssertEqual(decoded.count, 1)
@@ -115,7 +117,8 @@ final class SourceStoreTests: XCTestCase {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        let data = try encoder.encode([install])
+        let installs: [SourceInstall] = [install]
+        let data = try encoder.encode(installs)
         let decoded = try decoder.decode([SourceInstall].self, from: data)
 
         XCTAssertEqual(decoded.count, 1)
