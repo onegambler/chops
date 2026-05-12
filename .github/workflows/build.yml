@@ -56,6 +56,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Run tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Chops.xcodeproj \
+            -scheme ChopsTests \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData \
+            -clonedSourcePackagesDirPath .build/SourcePackages \
+            CODE_SIGNING_ALLOWED=NO
+
       - name: Package unsigned app
         run: |
           ditto -c -k --sequesterRsrc --keepParent \

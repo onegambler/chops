@@ -53,3 +53,16 @@ targets:
           CODE_SIGN_IDENTITY: "Developer ID Application"
         LocalRelease:
           CODE_SIGN_ENTITLEMENTS: Chops/ChopsLocalRelease.entitlements
+
+  ChopsTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - ChopsTests
+    dependencies:
+      - target: Chops
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.joshpigford.ChopsTests
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        SWIFT_STRICT_CONCURRENCY: minimal
