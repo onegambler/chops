@@ -76,12 +76,18 @@ final class SourceStoreTests: XCTestCase {
             displayName: "Test Source",
             kind: .local,
             path: "/tmp/test",
-            branch: "",
-            createdAt: Date()
+            branch: ""
         )
 
-        let data = try JSONEncoder.sourceEncoder.encode([source])
-        let decoded = try JSONDecoder.sourceDecoder.decode([Source].self, from: data)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let data = try encoder.encode([source])
+        let decoded = try decoder.decode([Source].self, from: data)
 
         XCTAssertEqual(decoded.count, 1)
         XCTAssertEqual(decoded.first?.id, source.id)
@@ -94,13 +100,23 @@ final class SourceStoreTests: XCTestCase {
             id: UUID().uuidString,
             sourceID: "test-source",
             sourceSkillRelativePath: "skills/test",
+            sourceSkillAbsolutePath: "/source/skills/test",
             targetID: "claude",
+            targetDisplayName: "Claude Code",
             installedPath: "/test/path",
-            createdAt: Date()
+            symlinkTarget: "/source/skills/test",
+            installedAt: Date()
         )
 
-        let data = try JSONEncoder.sourceEncoder.encode([install])
-        let decoded = try JSONDecoder.sourceDecoder.decode([SourceInstall].self, from: data)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let data = try encoder.encode([install])
+        let decoded = try decoder.decode([SourceInstall].self, from: data)
 
         XCTAssertEqual(decoded.count, 1)
         XCTAssertEqual(decoded.first?.sourceID, install.sourceID)

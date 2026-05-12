@@ -11,7 +11,12 @@ final class ToolSourceTests: XCTestCase {
 
     func testToolSourcePathsAreValid() {
         for tool in ToolSource.allCases {
-            let paths = tool.paths
+            let paths = tool.globalPaths + tool.globalAgentPaths + tool.globalRulePaths
+            // Custom tool has no global paths
+            if tool == .custom {
+                continue
+            }
+
             XCTAssertFalse(paths.isEmpty, "\(tool.rawValue) should have at least one path")
 
             for path in paths {
