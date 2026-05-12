@@ -6,22 +6,29 @@ final class OneShotResponseParserTests: XCTestCase {
     // MARK: - Structured Edit Format Tests
 
     func testParseStructuredEditFormat() {
-        let response = """
-        Here's the updated file:
+        let originalContent = """
+        ---
+        name: Test
+        ---
 
-        ```json
-        {
-          "summary": "Updated skill description",
-          "full_file": "---\\nname: Test\\n---\\n\\nUpdated content"
-        }
-        ```
+        Original content
         """
 
-        let result = OneShotResponseParser.parse(response)
+        let response = """
+        Updated skill description
 
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.summary, "Updated skill description")
-        XCTAssertTrue(result?.fileContent.contains("Updated content") ?? false)
+        {
+          "summary": "Updated skill description",
+          "edits": [
+            {"find": "Original content", "replace": "Updated content"}
+          ]
+        }
+        """
+
+        let result = OneShotResponseParser.parse(response, originalContent: originalContent)
+
+        XCTAssertEqual(result.summary, "Updated skill description")
+        XCTAssertTrue(result.newContent?.contains("Updated content") ?? false)
     }
 
     // MARK: - Fenced Block Format Tests
@@ -39,11 +46,11 @@ final class OneShotResponseParserTests: XCTestCase {
         ```
         """
 
-        let result = OneShotResponseParser.parse(response)
+        let result = OneShotResponseParser.parse(response, originalContent: nil)
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.fileContent.contains("Test Skill") ?? false)
-        XCTAssertTrue(result?.fileContent.contains("updated content") ?? false)
+        XCTAssertEqual(result.summary, "I've updated the skill.")
+        XCTAssertTrue(result.newContent?.contains("Test Skill") ?? false)
+        XCTAssertTrue(result.newContent?.contains("updated content") ?? false)
     }
 
     func testParseFencedCodeBlock() {
@@ -59,10 +66,10 @@ final class OneShotResponseParserTests: XCTestCase {
         ```
         """
 
-        let result = OneShotResponseParser.parse(response)
+        let result = OneShotResponseParser.parse(response, originalContent: nil)
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.fileContent.contains("Simple Skill") ?? false)
+        XCTAssertEqual(result.summary, "Updated the file:")
+        XCTAssertTrue(result.newContent?.contains("Simple Skill") ?? false)
     }
 
     func testParseMultipleFencedBlocks() {
@@ -84,10 +91,10 @@ final class OneShotResponseParserTests: XCTestCase {
         ```
         """
 
-        let result = OneShotResponseParser.parse(response)
+        let result = OneShotResponseParser.parse(response, originalContent: nil)
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.fileContent.contains("name: Test") ?? false)
+        XCTAssertNotNil(result.newContent)
+        XCTAssertTrue(result.newContent?.contains("print(\"hello\")") ?? false)
     }
 
     // MARK: - Edge Cases
@@ -95,46 +102,52 @@ final class OneShotResponseParserTests: XCTestCase {
     func testParseResponseWithNoCodeBlocks() {
         let response = "This is just plain text without any code blocks."
 
-        let result = OneShotResponseParser.parse(response)
+        let result = OneShotResponseParser.parse(response, originalContent: nil)
 
-        XCTAssertNil(result)
+        XCTAssertEqual(result.summary, response)
+        XCTAssertNil(result.newContent)
     }
 
     func testParseEmptyResponse() {
         let response = ""
 
-        let result = OneShotResponseParser.parse(response)
+        let result = OneShotResponseParser.parse(response, originalContent: nil)
 
-        XCTAssertNil(result)
+        XCTAssertEqual(result.summary, "")
+        XCTAssertNil(result.newContent)
     }
 
-    func testParseInvalidJSON() {
-        let response = """
-        ```json
-        { invalid json here }
-        ```
-        """
-
-        let result = OneShotResponseParser.parse(response)
-
-        // Should fall back to raw fence content or return nil
-        XCTAssertTrue(result == nil || result?.fileContent.contains("invalid") ?? false)
-    }
-
-    func testParseWithEscapedNewlines() {
+    func testParseStructuredEditsWithNoEdits() {
         let response = """
         ```json
         {
-          "summary": "Test",
-          "full_file": "Line 1\\nLine 2\\nLine 3"
+          "summary": "No changes needed",
+          "edits": []
         }
         ```
         """
 
-        let result = OneShotResponseParser.parse(response)
+        let result = OneShotResponseParser.parse(response, originalContent: "original")
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.fileContent.contains("Line 1") ?? false)
-        XCTAssertTrue(result?.fileContent.contains("Line 2") ?? false)
+        XCTAssertEqual(result.summary, "No changes needed")
+        XCTAssertNil(result.newContent)
+    }
+
+    func testParseStructuredEditsWithoutOriginal() {
+        let response = """
+        ```json
+        {
+          "summary": "Made changes",
+          "edits": [
+            {"find": "old", "replace": "new"}
+          ]
+        }
+        ```
+        """
+
+        let result = OneShotResponseParser.parse(response, originalContent: nil)
+
+        XCTAssertEqual(result.summary, "Made changes")
+        XCTAssertNil(result.newContent)
     }
 }
