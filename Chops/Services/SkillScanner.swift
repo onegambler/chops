@@ -73,8 +73,9 @@ final class SkillScanner {
         let generation = scanGeneration
         let customPaths = UserDefaults.standard.stringArray(forKey: "customScanPaths") ?? []
         let includePlugins = ChopsSettings.includePluginSkills
+        let repoPaths = (try? modelContext.fetch(FetchDescriptor<WatchedRepo>()))?.map(\.path) ?? []
         scanTask = Task.detached { [weak self] in
-            let results = Self.collectAllSkills(customPaths: customPaths, includePlugins: includePlugins)
+            let results = Self.collectAllSkills(customPaths: customPaths, repoPaths: repoPaths, includePlugins: includePlugins)
             guard !Task.isCancelled else { return }
             let elapsed = CFAbsoluteTimeGetCurrent() - start
             AppLogger.scanning.notice("File collection done: \(results.count) skills in \(String(format: "%.2f", elapsed))s")
@@ -89,7 +90,7 @@ final class SkillScanner {
     }
 
     /// Pure filesystem I/O — safe to run off main thread.
-    private static func collectAllSkills(customPaths: [String], includePlugins: Bool) -> [ScannedSkillData] {
+    private static func collectAllSkills(customPaths: [String], repoPaths: [String], includePlugins: Bool) -> [ScannedSkillData] {
         var results: [ScannedSkillData] = []
 
         for tool in ToolSource.allCases where tool != .custom {
@@ -127,7 +128,33 @@ final class SkillScanner {
             collectFromCustomDirectory(URL(fileURLWithPath: path), into: &results)
         }
 
+        for path in repoPaths {
+            guard !Task.isCancelled else { return results }
+            collectFromProjectRoot(URL(fileURLWithPath: path), into: &results)
+        }
+
         return results
+    }
+
+    /// Scans a single project root directly for all tool-specific skill paths using projectProbes.
+    /// Unlike collectFromCustomDirectory, applies probes to the root itself (not its subdirs).
+    private static func collectFromProjectRoot(_ root: URL, into results: inout [ScannedSkillData]) {
+        let fm = FileManager.default
+        for probe in projectProbes {
+            guard !Task.isCancelled else { return }
+            let probePath = root.appendingPathComponent(probe.subpath)
+            guard fm.fileExists(atPath: probePath.path) else { continue }
+
+            if probe.tool == .copilot && probe.kind == .skill {
+                let file = probePath.appendingPathComponent("copilot-instructions.md")
+                if fm.fileExists(atPath: file.path),
+                   let data = collectSkillData(at: file, toolSource: .copilot, isDirectory: false, isGlobal: false, kind: probe.kind) {
+                    results.append(data)
+                }
+            } else {
+                collectFromDirectory(probePath, toolSource: probe.tool, isGlobal: false, kind: probe.kind, into: &results)
+            }
+        }
     }
 
     private static func collectFromCustomDirectory(_ directory: URL, into results: inout [ScannedSkillData]) {
@@ -665,6 +692,85 @@ final class SkillScanner {
         }
         do { try modelContext.save() } catch {
             AppLogger.scanning.error("SwiftData save failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Watched Repo Scanning
+
+    /// Scans a single watched repo for skills and applies the results scoped to that repo's path.
+    @MainActor
+    func scanRepo(_ repo: WatchedRepo) async {
+        let repoPath = repo.path
+        let results = await Task.detached {
+            var r: [ScannedSkillData] = []
+            Self.collectFromProjectRoot(URL(fileURLWithPath: repoPath), into: &r)
+            return r
+        }.value
+
+        applyRepoResults(results, for: repo)
+        repo.lastScanDate = .now
+        repo.lastScanError = nil
+        do { try modelContext.save() } catch {
+            AppLogger.scanning.error("SwiftData save failed after repo scan: \(error.localizedDescription)")
+        }
+    }
+
+    /// Upserts/deletes skills scoped to a single repo path. Does not touch global or other-repo skills.
+    @MainActor
+    private func applyRepoResults(_ results: [ScannedSkillData], for repo: WatchedRepo) {
+        let repoPath = repo.path
+        let groupedResults = Dictionary(grouping: results, by: \.resolvedPath)
+        let allSkills = (try? modelContext.fetch(FetchDescriptor<Skill>())) ?? []
+        let repoSkills = allSkills.filter { !$0.isRemote && $0.filePath.hasPrefix(repoPath) }
+        let existingByResolved = Dictionary(uniqueKeysWithValues: repoSkills.map { ($0.resolvedPath, $0) })
+        let scannedPaths = Set(groupedResults.keys)
+
+        for (resolvedPath, installations) in groupedResults {
+            guard let primary = installations.first else { continue }
+
+            let installedPaths = Array(Set(installations.map(\.fileURL.path))).sorted()
+            let toolSources = ToolSource.allCases.filter { tool in
+                installations.contains { $0.toolSource == tool }
+            }
+
+            if let existing = existingByResolved[resolvedPath] {
+                let preferredPath = installedPaths.contains(existing.filePath) ? existing.filePath : primary.fileURL.path
+                let preferredData = installations.first(where: { $0.fileURL.path == preferredPath }) ?? primary
+                existing.filePath = preferredPath
+                existing.isDirectory = preferredData.isDirectory
+                existing.name = preferredData.name
+                existing.skillDescription = preferredData.skillDescription
+                existing.content = preferredData.content
+                existing.frontmatter = preferredData.frontmatter
+                existing.fileModifiedDate = preferredData.modDate
+                existing.fileSize = preferredData.fileSize
+                existing.isGlobal = preferredData.isGlobal
+                existing.installedPaths = installedPaths
+                existing.toolSources = toolSources
+                existing.itemKind = preferredData.kind
+            } else {
+                let skill = Skill(
+                    filePath: primary.fileURL.path,
+                    toolSource: primary.toolSource,
+                    isDirectory: primary.isDirectory,
+                    name: primary.name,
+                    skillDescription: primary.skillDescription,
+                    content: primary.content,
+                    frontmatter: primary.frontmatter,
+                    fileModifiedDate: primary.modDate,
+                    fileSize: primary.fileSize,
+                    isGlobal: primary.isGlobal,
+                    resolvedPath: primary.resolvedPath,
+                    kind: primary.kind
+                )
+                skill.installedPaths = installedPaths
+                skill.toolSources = toolSources
+                modelContext.insert(skill)
+            }
+        }
+
+        for skill in repoSkills where !scannedPaths.contains(skill.resolvedPath) {
+            modelContext.delete(skill)
         }
     }
 

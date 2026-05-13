@@ -51,6 +51,8 @@ struct SkillListView: View {
             }
         case .server(let serverID):
             result = result.filter { $0.remoteServer?.id == serverID }
+        case .repo(let repoPath):
+            result = result.filter { !$0.isRemote && $0.filePath.hasPrefix(repoPath) }
         }
 
         if !appState.searchText.isEmpty {
@@ -74,6 +76,8 @@ struct SkillListView: View {
         case .collection(let name): name
         case .server(let id):
             allSkills.first(where: { $0.remoteServer?.id == id })?.remoteServer?.label ?? "Remote"
+        case .repo(let path):
+            URL(fileURLWithPath: path).lastPathComponent
         }
     }
 

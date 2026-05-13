@@ -71,6 +71,12 @@ struct ContentView: View {
         if fm.fileExists(atPath: claudeDesktopSessions) {
             allPaths.append(claudeDesktopSessions)
         }
+        if let watchedRepos = try? modelContext.fetch(FetchDescriptor<WatchedRepo>()) {
+            for repo in watchedRepos where fm.fileExists(atPath: repo.path) {
+                allPaths.append(repo.path)
+            }
+        }
+
         allPaths = Array(Set(allPaths)).sorted()
 
         let watcher = FileWatcher { _ in
@@ -84,6 +90,15 @@ struct ContentView: View {
         // Sync remote servers in the background
         Task {
             await scanner.syncAllRemoteServers()
+        }
+
+        // Scan watched repos in the background
+        Task {
+            if let repos = try? modelContext.fetch(FetchDescriptor<WatchedRepo>()) {
+                for repo in repos {
+                    await scanner.scanRepo(repo)
+                }
+            }
         }
     }
 }

@@ -6,19 +6,23 @@ import SwiftData
 /// aggressive I-beam cursor.
 private struct ClickableCursorOverlay: NSViewRepresentable {
     var action: () -> Void
+    var onHoverChange: ((Bool) -> Void)? = nil
 
     func makeNSView(context: Context) -> OverlayNSView {
         let view = OverlayNSView()
         view.onTap = action
+        view.onHoverChange = onHoverChange
         return view
     }
 
     func updateNSView(_ nsView: OverlayNSView, context: Context) {
         nsView.onTap = action
+        nsView.onHoverChange = onHoverChange
     }
 
     final class OverlayNSView: NSView {
         var onTap: (() -> Void)?
+        var onHoverChange: ((Bool) -> Void)?
         private var area: NSTrackingArea?
 
         override func updateTrackingAreas() {
@@ -43,10 +47,12 @@ private struct ClickableCursorOverlay: NSViewRepresentable {
 
         override func mouseEntered(with event: NSEvent) {
             NSCursor.pointingHand.set()
+            DispatchQueue.main.async { self.onHoverChange?(true) }
         }
 
         override func mouseExited(with event: NSEvent) {
             NSCursor.arrow.set()
+            DispatchQueue.main.async { self.onHoverChange?(false) }
         }
 
         override func mouseDown(with event: NSEvent) {
@@ -88,6 +94,7 @@ struct SkillDetailView: View {
     @State private var activeAlert: ActiveAlert?
     @State private var autoSaveTask: Task<Void, Never>?
     @State private var showingComposePanel = false
+    @State private var isFABHovered = false
 
     var body: some View {
         @Bindable var document = document
@@ -245,7 +252,10 @@ struct SkillDetailView: View {
             .frame(width: 36, height: 36)
             .background(Circle().fill(Color.accentColor))
             .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
-            .overlay(ClickableCursorOverlay(action: { [self] in showingComposePanel.toggle() }))
+            .brightness(isFABHovered ? 0.15 : 0)
+            .scaleEffect(isFABHovered ? 1.06 : 1.0)
+            .animation(.easeInOut(duration: 0.12), value: isFABHovered)
+            .overlay(ClickableCursorOverlay(action: { showingComposePanel.toggle() }, onHoverChange: { isFABHovered = $0 }))
             .help("Compose with AI")
             .padding(16)
     }
